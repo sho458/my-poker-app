@@ -44,7 +44,7 @@ export default function Home() {
         setPot(data.pot || 0);
         setPlayers(data.players || []);
         setHistory(data.history || []);
-        setConfig(data.config || { sb: 30, bb: 60, initialChips: 10000 });
+        setConfig(data.config || { sb: 30, bb: 60, initialChips: 2000 });
         if (data.players?.some((p: any) => p.name === pName)) setIsJoined(true);
       }
     });
