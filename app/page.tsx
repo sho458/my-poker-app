@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, updateDoc, setDoc, getDoc, collection, getDocs } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, setDoc, getDoc, collection, deleteDoc } from "firebase/firestore";
 
 export default function Home() {
   const [playerName, setPlayerName] = useState("");
@@ -17,25 +17,22 @@ export default function Home() {
   const [players, setPlayers] = useState<any[]>([]);
   const [input, setInput] = useState('0');
   const [history, setHistory] = useState<string[]>([]);
-  const [config, setConfig] = useState({ sb: 30, bb: 60 });
+  const [config, setConfig] = useState({ sb: 30, bb: 60, initialChips: 10000 });
 
-  // 1. 初期化：ブラウザの記憶とルーム一覧の取得
   useEffect(() => {
     const savedName = localStorage.getItem("poker_name");
     const savedRoom = localStorage.getItem("poker_room");
     if (savedName) setPlayerName(savedName);
     
-    // ルーム一覧をリアルタイムで取得
     const roomsCol = collection(db, "games");
     const unsubRooms = onSnapshot(roomsCol, (snap) => {
-      const roomList = snap.docs.map(doc => doc.id);
-      setAvailableRooms(roomList);
+      setAvailableRooms(snap.docs.map(doc => doc.id));
     });
 
-   if (savedRoom && savedName) {
-  setRoomId(savedRoom);
-  startSync(savedRoom, savedName);
-}
+    if (savedRoom && savedName) {
+      setRoomId(savedRoom);
+      startSync(savedRoom, savedName);
+    }
     return () => unsubRooms();
   }, []);
 
@@ -47,7 +44,7 @@ export default function Home() {
         setPot(data.pot || 0);
         setPlayers(data.players || []);
         setHistory(data.history || []);
-        setConfig(data.config || { sb: 30, bb: 60 });
+        setConfig(data.config || { sb: 30, bb: 60, initialChips: 10000 });
         if (data.players?.some((p: any) => p.name === pName)) setIsJoined(true);
       }
     });
@@ -61,10 +58,12 @@ export default function Home() {
     const snap = await getDoc(docRef);
 
     if (mode === 'create') {
+      if (snap.exists()) return alert("そのルーム名は既に使用されています。別の名前を試してね！");
+      
       await setDoc(docRef, {
         pot: 0,
         players: [{ name: playerName, chips: parseInt(initialChips) }],
-        config: { sb: parseInt(sb), bb: parseInt(bb) },
+        config: { sb: parseInt(sb), bb: parseInt(bb), initialChips: parseInt(initialChips) },
         history: ["Room Created"]
       });
     } else {
@@ -72,7 +71,7 @@ export default function Home() {
       const data = snap.data();
       if (!data.players.some((p: any) => p.name === playerName)) {
         await updateDoc(docRef, {
-          players: [...data.players, { name: playerName, chips: 10000 }] // 初期チップ
+          players: [...data.players, { name: playerName, chips: data.config?.initialChips || 10000 }]
         });
       }
     }
@@ -86,6 +85,19 @@ export default function Home() {
 
   const handleReset = async () => {
     if (!confirm("ルームから退出しますか？")) return;
+    const docRef = doc(db, "games", roomId);
+    
+    // 自分を除いたプレイヤーリストを作成
+    const remainingPlayers = players.filter(p => p.name !== playerName);
+
+    if (remainingPlayers.length === 0) {
+      // 誰もいなくなるならルームを削除
+      await deleteDoc(docRef);
+    } else {
+      // まだ誰かいるなら自分だけ抜ける
+      await updateDoc(docRef, { players: remainingPlayers });
+    }
+
     localStorage.removeItem("poker_room");
     setIsJoined(false);
   };
@@ -132,13 +144,13 @@ export default function Home() {
 
   if (!isJoined) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-6 font-sans">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-6">
         <h1 className="text-3xl font-bold mb-8 italic text-orange-500 tracking-tighter">POKER CHIP TOOL</h1>
         <div className="w-full max-w-sm space-y-6">
           <input type="text" placeholder="Your Name" className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl w-full text-center text-xl" value={playerName} onChange={(e) => setPlayerName(e.target.value)} />
           
           <div className="space-y-4">
-            <p className="text-xs text-zinc-500 uppercase tracking-widest text-center">既存のルームに参加</p>
+            <p className="text-xs text-zinc-500 uppercase tracking-widest text-center font-bold">既存のルームに参加</p>
             <div className="space-y-2">
               {availableRooms.length > 0 ? (
                 availableRooms.map(r => (
@@ -148,24 +160,26 @@ export default function Home() {
                   </button>
                 ))
               ) : (
-                <div className="text-center py-4 bg-zinc-900/50 rounded-xl border border-zinc-800/30 text-zinc-600 text-sm italic">
-                  現在稼働中のルームはありません
-                </div>
+                <div className="text-center py-4 bg-zinc-900/50 rounded-xl border border-zinc-800/30 text-zinc-600 text-sm italic">稼働中のルームはありません</div>
               )}
             </div>
           </div>
 
           <div className="pt-6 border-t border-zinc-800 space-y-4">
-            <p className="text-xs text-zinc-500 uppercase tracking-widest text-center">新しくルームを作る</p>
+            <p className="text-xs text-zinc-500 uppercase tracking-widest text-center font-bold">新しくルームを作る</p>
             <input type="text" placeholder="New Room Name" className="bg-zinc-900 border border-zinc-800 p-3 rounded-xl w-full text-center" value={roomId} onChange={(e) => setRoomId(e.target.value)} />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2 text-[10px]">
               <div className="bg-zinc-900 p-2 rounded-lg border border-zinc-800">
-                <label className="block text-[8px] text-zinc-500 text-center uppercase">SB Amount</label>
-                <input type="number" className="bg-transparent w-full text-center font-bold" value={sb} onChange={(e) => setSb(e.target.value)} />
+                <label className="block text-zinc-500 text-center uppercase mb-1">SB</label>
+                <input type="number" className="bg-transparent w-full text-center font-bold text-sm" value={sb} onChange={(e) => setSb(e.target.value)} />
               </div>
               <div className="bg-zinc-900 p-2 rounded-lg border border-zinc-800">
-                <label className="block text-[8px] text-zinc-500 text-center uppercase">BB Amount</label>
-                <input type="number" className="bg-transparent w-full text-center font-bold" value={bb} onChange={(e) => setBb(e.target.value)} />
+                <label className="block text-zinc-500 text-center uppercase mb-1">BB</label>
+                <input type="number" className="bg-transparent w-full text-center font-bold text-sm" value={bb} onChange={(e) => setBb(e.target.value)} />
+              </div>
+              <div className="bg-zinc-900 p-2 rounded-lg border border-zinc-800">
+                <label className="block text-zinc-500 text-center uppercase mb-1">Buy-in</label>
+                <input type="number" className="bg-transparent w-full text-center font-bold text-sm" value={initialChips} onChange={(e) => setInitialChips(e.target.value)} />
               </div>
             </div>
             <button onClick={() => handleJoin('create')} className="bg-orange-600 hover:bg-orange-500 w-full p-4 rounded-xl font-bold transition-colors">CREATE & ENTER</button>
@@ -175,7 +189,6 @@ export default function Home() {
     );
   }
 
-  // (メイン画面のUIはVer 1.6と同じため省略... 必要に応じてVer 1.6のreturn部分をここに配置してください)
   return (
     <div className="flex flex-col min-h-screen bg-black text-white p-4 max-w-2xl mx-auto">
       <div className="flex justify-between items-center mb-8">
