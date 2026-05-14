@@ -8,7 +8,7 @@ export default function Home() {
   const [playerName, setPlayerName] = useState("");
   const [roomId, setRoomId] = useState("");
   const [availableRooms, setAvailableRooms] = useState<string[]>([]);
-  const [initialChips, setInitialChips] = useState("2000");
+  const [initialChips, setInitialChips] = useState("2000"); // 初期値を2000に変更
   const [sb, setSb] = useState("30");
   const [bb, setBb] = useState("60");
   
@@ -17,7 +17,7 @@ export default function Home() {
   const [players, setPlayers] = useState<any[]>([]);
   const [input, setInput] = useState('0');
   const [history, setHistory] = useState<string[]>([]);
-  const [config, setConfig] = useState({ sb: 30, bb: 60, initialChips: 2000 });
+  const [config, setConfig] = useState({ sb: 30, bb: 60, initialChips: 2000 }); // ここも2000に統一
 
   useEffect(() => {
     const savedName = localStorage.getItem("poker_name");
@@ -44,7 +44,7 @@ export default function Home() {
         setPot(data.pot || 0);
         setPlayers(data.players || []);
         setHistory(data.history || []);
-        setConfig(data.config || { sb: 30, bb: 60, initialChips: 10000 });
+        setConfig(data.config || { sb: 30, bb: 60, initialChips: 2000 });
         if (data.players?.some((p: any) => p.name === pName)) setIsJoined(true);
       }
     });
@@ -71,7 +71,7 @@ export default function Home() {
       const data = snap.data();
       if (!data.players.some((p: any) => p.name === playerName)) {
         await updateDoc(docRef, {
-          players: [...data.players, { name: playerName, chips: data.config?.initialChips || 10000 }]
+          players: [...data.players, { name: playerName, chips: data.config?.initialChips || 2000 }]
         });
       }
     }
@@ -125,7 +125,22 @@ export default function Home() {
       previousState: snap.data(),
       pot: 0,
       players: updatedPlayers,
-      history: [`${playerName}: Win Pot (${pot})`, ...history].slice(0, 10)
+      history: [`${playerName}: Win Pot (${pot})`, ...history].slice(0, 50)
+    });
+  };
+
+  // チップ数を直接編集する機能
+  const handleEditChips = async (targetName: string, currentAmount: number) => {
+    const val = prompt(`${targetName} のチップ数を修正しますか？`, String(currentAmount));
+    if (val === null || isNaN(parseInt(val))) return;
+    
+    const docRef = doc(db, "games", roomId);
+    const updatedPlayers = players.map(p => 
+      p.name === targetName ? { ...p, chips: parseInt(val) } : p
+    );
+    await updateDoc(docRef, {
+      players: updatedPlayers,
+      history: [`${playerName}: Edit ${targetName} to ${val}`, ...history].slice(0, 50)
     });
   };
 
@@ -137,9 +152,8 @@ export default function Home() {
   };
 
   if (!isJoined) {
-    // (参加画面はVer 1.8と同じなので、このままコピペでOKです)
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-6">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-6 w-full">
         <h1 className="text-3xl font-bold mb-8 italic text-orange-500 tracking-tighter text-center">POKER CHIP TOOL</h1>
         <div className="w-full max-w-sm space-y-6">
           <input type="text" placeholder="Your Name" className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl w-full text-center text-xl shadow-inner" value={playerName} onChange={(e) => setPlayerName(e.target.value)} />
@@ -174,7 +188,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-black text-white p-4 max-w-2xl mx-auto">
+    <div className="flex flex-col min-h-screen bg-black text-white p-4 w-full mx-auto">
       {/* HEADER */}
       <div className="flex justify-between items-center mb-4">
         <span className="text-[10px] text-zinc-500 uppercase font-mono tracking-tighter">Room: {roomId} (SB:{config.sb}/BB:{config.bb})</span>
@@ -189,10 +203,14 @@ export default function Home() {
         {/* PLAYER LIST */}
         <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-2xl p-4 shadow-2xl">
           {[...players].sort((a, b) => b.chips - a.chips).map((p, i) => (
-            <div key={i} className={`flex justify-between items-center py-2 ${p.name === playerName ? 'text-orange-400 font-bold' : 'text-zinc-400'}`}>
+            <button 
+              key={i} 
+              onClick={() => handleEditChips(p.name, p.chips)}
+              className={`w-full flex justify-between items-center py-2 ${p.name === playerName ? 'text-orange-400 font-bold' : 'text-zinc-400'} active:bg-white/5 rounded-lg transition-colors`}
+            >
               <span className="text-sm">{p.name} {p.name === playerName && "★"}</span>
               <span className="font-mono text-lg">{p.chips.toLocaleString()}</span>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -222,13 +240,11 @@ export default function Home() {
         ))}
         <button onClick={handleUndo} className="bg-zinc-800/50 text-zinc-500 rounded-2xl h-12 text-xs font-bold active:bg-zinc-700">UNDO ↩︎</button>
         <button onClick={() => setInput(prev => prev === '0' ? '0' : prev + '0')} className="bg-zinc-900 border border-zinc-800/50 rounded-2xl h-12 text-xl active:bg-zinc-800">0</button>
-        <div className="flex items-center justify-center text-[8px] text-zinc-800 font-mono">ver 1.9</div>
       </div>
 
       {/* HISTORY LOG AREA */}
       <div className="bg-zinc-900/20 border-t border-zinc-800/50 -mx-4 px-4 py-3">
         <p className="text-[8px] text-zinc-600 uppercase tracking-widest mb-2 font-bold">Recent History</p>
-        {/* ここに max-h-24 と overflow-y-auto を追加してスクロール可能に */}
         <div className="space-y-1 max-h-24 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700">
           {history.length > 0 ? (
             history.map((log, i) => (
