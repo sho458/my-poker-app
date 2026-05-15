@@ -235,7 +235,7 @@ export default function Home() {
 
       {/* TEN KEYPAD */}
       <div className="grid grid-cols-3 gap-3 mb-4">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+        {[7, 8, 9, 4, 5, 6, 1, 2, 3].map(num => (
           <button key={num} onClick={() => setInput(prev => prev === '0' ? String(num) : prev + num)} className="bg-zinc-900 border border-zinc-800/50 rounded-2xl h-12 text-xl active:bg-zinc-800">{num}</button>
         ))}
         <button onClick={handleUndo} className="bg-zinc-800/50 text-zinc-500 rounded-2xl h-12 text-xs font-bold active:bg-zinc-700">UNDO ↩︎</button>
